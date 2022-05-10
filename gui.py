@@ -120,7 +120,9 @@ class GUIApp(QMainWindow):
 
     def select_sand_container(self, strategy):
         self.initialize_board()
+        self.board_update_mutex.lock()
         strategy.fill(self)
+        self.board_update_mutex.unlock()
 
     def make_board(self):
         for i in range(14):
