@@ -1,5 +1,8 @@
+from threading import Thread
+from abc import ABC, abstractmethod
 
-class SquareChecker(object):
+
+class SquareChecker():
     def __init__(self, simulation_thread, client) -> None:
         self.client = client
         self.simulation_thread = simulation_thread

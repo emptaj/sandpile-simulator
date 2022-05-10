@@ -22,6 +22,7 @@ class GUIApp(QMainWindow):
         self.text = "Siema"
         uic.loadUi("stylesheet.ui", self)
 
+        self.board_update_mutex = QMutex()
         self.connect_btns()
         self.setWindowTitle("Symulator opadania piasku")
         self.make_board()
@@ -33,7 +34,7 @@ class GUIApp(QMainWindow):
         self.show()
 
     def connect_btns(self):
-        self.worker = SimulationThread(self)
+        self.worker = SimulationThread(self, self.board_update_mutex)
         self.sand_container1.clicked.connect(
             partial(self.select_sand_container, Lines()))
         self.sand_container2.clicked.connect(
@@ -62,6 +63,8 @@ class GUIApp(QMainWindow):
         self.worker.single_drop.connect(self.drop)
 
     def update_square(self, square, new_state):
+        self.board_update_mutex.lock()
+
         if new_state == 1:
             self.board.itemAtPosition(
                 square[0][0], square[0][1]).widget().set_sand(False)
@@ -97,9 +100,13 @@ class GUIApp(QMainWindow):
             self.board.itemAtPosition(
                 square[3][0], square[3][1]).widget().set_sand(True)
 
+        self.board_update_mutex.unlock()
+
     def drop(self, x, y):
+        self.board_update_mutex.lock()
         self.board.itemAtPosition(x, y).widget().set_sand(False)
         self.board.itemAtPosition(x+1, y).widget().set_sand(True)
+        self.board_update_mutex.unlock()
 
     def start_simulation(self):
         if not self.worker.pause:
@@ -121,12 +128,16 @@ class GUIApp(QMainWindow):
                 self.board.addWidget(Tile(False), i, j)
 
     def initialize_board(self):
+        self.board_update_mutex.lock()
+
         for i in range(14):
             for j in range(20):
                 if self.board.itemAtPosition(i, j).widget().is_blocking():
                     self.board.itemAtPosition(i, j).widget().set_sand(False)
                     self.board.itemAtPosition(
                         i, j).widget().set_blocking(False)
+
+        self.board_update_mutex.unlock()
 
     def make_sub_grids(self):
         rows = 14
@@ -145,6 +156,8 @@ class GUIApp(QMainWindow):
                 self.from_11.append(square)
 
     def generate_sand(self, generate_random=False):
+        self.board_update_mutex.lock()
+
         if generate_random:
             how_many = random.randint(10, 40)
             x = []
@@ -163,6 +176,8 @@ class GUIApp(QMainWindow):
             for i in range(0, 20):
                 self.board.itemAtPosition(0, i).widget().set_sand()
                 self.board.itemAtPosition(1, i).widget().set_sand()
+
+        self.board_update_mutex.unlock()
 
 
 if __name__ == '__main__':
