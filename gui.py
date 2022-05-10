@@ -7,13 +7,13 @@ from PyQt5.QtWidgets import *
 from PyQt5 import uic
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
+from board_utils import BoardUtils
 from simulation import SimulationThread
 
-from tile import Tile
-from container_strategy import Bowl, Circle, Lines, SandGlass
-import random
-
-import time
+from circle_container_strategy import Circle
+from lines_container_strategy import Lines
+from sand_glass_container_strategy import SandGlass
+from bowl_container_strategy import Bowl
 
 
 class GUIApp(QMainWindow):
@@ -25,30 +25,32 @@ class GUIApp(QMainWindow):
         self.board_update_mutex = QMutex()
         self.connect_btns()
         self.setWindowTitle("Symulator opadania piasku")
-        self.make_board()
+        BoardUtils.make_board(self.board)
         self.from_00 = []
         self.from_11 = []
-        self.make_sub_grids()
-        self.initialize_board()
+        BoardUtils.make_grids_from_squares(self.from_00, self.from_11)
+        BoardUtils.initialize_board(self.board)
         self.setFixedSize(1228, 670)
         self.show()
 
     def connect_btns(self):
-        self.worker = SimulationThread(self, self.board_update_mutex)
+        self.worker = SimulationThread(
+            self)
         self.sand_container1.clicked.connect(
-            partial(self.select_sand_container, Lines()))
+            partial(BoardUtils.set_sand_container, self, Lines()))
         self.sand_container2.clicked.connect(
-            partial(self.select_sand_container, Circle()))
+            partial(BoardUtils.set_sand_container, self, Circle()))
         self.sand_container3.clicked.connect(
-            partial(self.select_sand_container, Bowl()))
+            partial(BoardUtils.set_sand_container, self, Bowl()))
         self.sand_container4.clicked.connect(
-            partial(self.select_sand_container, SandGlass()))
-        self.clear_btn.clicked.connect(self.initialize_board)
+            partial(BoardUtils.set_sand_container, self, SandGlass()))
+        self.clear_btn.clicked.connect(
+            partial(BoardUtils.initialize_board, self.board))
 
         self.generate_sand_btn.clicked.connect(
-            partial(self.generate_sand, False))
+            partial(BoardUtils.generate_sand, self, False))
         self.generate_sand_rnd_btn.clicked.connect(
-            partial(self.generate_sand, True))
+            partial(BoardUtils.generate_sand, self, True))
 
         self.start_btn.clicked.connect(self.start_simulation)
         self.stop_btn.clicked.connect(self.stop_simulation)
@@ -60,49 +62,14 @@ class GUIApp(QMainWindow):
         self.stop_btn.setProperty('class', 'warning')
 
         self.worker.update_to_state.connect(self.update_square)
-        self.worker.single_drop.connect(self.drop)
+        self.worker.single_drop.connect(self.drop_square)
 
     def update_square(self, square, new_state):
         self.board_update_mutex.lock()
-
-        if new_state == 1:
-            self.board.itemAtPosition(
-                square[0][0], square[0][1]).widget().set_sand(False)
-            self.board.itemAtPosition(
-                square[2][0], square[2][1]).widget().set_sand(True)
-
-        elif new_state == 2:
-            self.board.itemAtPosition(
-                square[1][0], square[1][1]).widget().set_sand(False)
-            self.board.itemAtPosition(
-                square[3][0], square[3][1]).widget().set_sand(True)
-
-        elif new_state == 3:
-            self.board.itemAtPosition(
-                square[0][0], square[0][1]).widget().set_sand(False)
-            self.board.itemAtPosition(
-                square[3][0], square[3][1]).widget().set_sand(True)
-
-        elif new_state == 4:
-            self.board.itemAtPosition(
-                square[1][0], square[1][1]).widget().set_sand(False)
-            self.board.itemAtPosition(
-                square[2][0], square[2][1]).widget().set_sand(True)
-
-        elif new_state == 5:
-            self.board.itemAtPosition(
-                square[0][0], square[0][1]).widget().set_sand(False)
-            self.board.itemAtPosition(
-                square[1][0], square[1][1]).widget().set_sand(False)
-
-            self.board.itemAtPosition(
-                square[2][0], square[2][1]).widget().set_sand(True)
-            self.board.itemAtPosition(
-                square[3][0], square[3][1]).widget().set_sand(True)
-
+        BoardUtils.update_square(self.board, square, new_state)
         self.board_update_mutex.unlock()
 
-    def drop(self, x, y):
+    def drop_square(self, x, y):
         self.board_update_mutex.lock()
         self.board.itemAtPosition(x, y).widget().set_sand(False)
         self.board.itemAtPosition(x+1, y).widget().set_sand(True)
@@ -117,69 +84,6 @@ class GUIApp(QMainWindow):
     def stop_simulation(self):
         if self.worker.working and not self.worker.pause:
             self.worker.pause = True
-
-    def select_sand_container(self, strategy):
-        self.initialize_board()
-        self.board_update_mutex.lock()
-        strategy.fill(self)
-        self.board_update_mutex.unlock()
-
-    def make_board(self):
-        for i in range(14):
-            for j in range(20):
-                self.board.addWidget(Tile(False), i, j)
-
-    def initialize_board(self):
-        self.board_update_mutex.lock()
-
-        for i in range(14):
-            for j in range(20):
-                if self.board.itemAtPosition(i, j).widget().is_blocking():
-                    self.board.itemAtPosition(i, j).widget().set_sand(False)
-                    self.board.itemAtPosition(
-                        i, j).widget().set_blocking(False)
-
-        self.board_update_mutex.unlock()
-
-    def make_sub_grids(self):
-        rows = 14
-        ceils = 20
-
-        for i in range(0, rows-1, 2):
-            for j in range(0, ceils-1, 2):
-                square = ((i, j), (i, j+1),
-                          (i+1, j), (i+1, j+1))
-                self.from_00.append(square)
-
-        for i in range(1, rows-1, 2):
-            for j in range(1, ceils-1, 2):
-                square = ((i, j), (i, j+1),
-                          (i+1, j), (i+1, j+1))
-                self.from_11.append(square)
-
-    def generate_sand(self, generate_random=False):
-        self.board_update_mutex.lock()
-
-        if generate_random:
-            how_many = random.randint(10, 40)
-            x = []
-            y = []
-
-            for _ in range(how_many):
-                x.append(random.randint(0, 2))
-                y.append(random.randint(0, 19))
-
-            for cord_x, cord_y in zip(x, y):
-                if not self.board.itemAtPosition(cord_x, cord_y).widget().is_blocking():
-                    self.board.itemAtPosition(
-                        cord_x, cord_y).widget().set_sand()
-
-        else:
-            for i in range(0, 20):
-                self.board.itemAtPosition(0, i).widget().set_sand()
-                self.board.itemAtPosition(1, i).widget().set_sand()
-
-        self.board_update_mutex.unlock()
 
 
 if __name__ == '__main__':

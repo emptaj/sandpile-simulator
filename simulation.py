@@ -7,19 +7,14 @@ from PyQt5 import uic
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 
-from square_checker import SquareChecker
-
 
 class SimulationThread(QThread):
     changes_detected = True
     update_to_state = pyqtSignal(tuple, int)
     single_drop = pyqtSignal(int, int)
 
-    def __init__(self, client, mutex, parent=None):
+    def __init__(self, client, parent=None):
         QThread.__init__(self, parent)
-        self.mutex = mutex
-        # Thread.__init__(self, parent)
-        self.square_checker = SquareChecker(self, client)
         self.client = client
         self.pause = False
         self.turn_any_changes = False
@@ -32,13 +27,10 @@ class SimulationThread(QThread):
         self.turn_any_changes = False
         self.pause = False
 
-        print("POCZATEK")
         while self.any_changes:
-
             if not self.pause:
                 for square in self.client.from_00:
                     self.check_square(square)
-                    # self.square_checker.check_square(square)
                     time.sleep(0.001)
 
                 self.turn_any_changes = False
@@ -46,28 +38,19 @@ class SimulationThread(QThread):
                 for square in self.client.from_11:
                     self.check_double_square(square[0][0])
                     self.check_square(square)
-
-                    # self.square_checker.check_double_square(square[0][0])
-                    # self.square_checker.check_square(square)
-
                     time.sleep(0.001)
+
                 if not self.turn_any_changes:
-                    print("KONIEC - BRAK ZMIAN")
                     self.any_changes = False
 
         self.pause = False
         self.working = False
 
-        print("KONIEC")
-
     def stop(self):
         self.terminate()
 
-    def terminate(self):
-        print("spadam stad")
-
     def check_square(self, square):
-        self.mutex.lock()
+        self.client.board_update_mutex.lock()
 
         sand = [self.client.board.itemAtPosition(
             x, y).widget().is_sand() for x, y in square]
@@ -94,10 +77,10 @@ class SimulationThread(QThread):
             self.turn_any_changes = True
             self.update_to_state.emit(square, 2)
 
-        self.mutex.unlock()
+        self.client.board_update_mutex.unlock()
 
     def check_double_square(self, x):
-        self.mutex.lock()
+        self.client.board_update_mutex.lock()
 
         if self.client.board.itemAtPosition(x, 0).widget().is_sand() and not self.client.board.itemAtPosition(x+1, 0).widget().is_blocking():
             self.single_drop.emit(x, 0)
@@ -105,4 +88,4 @@ class SimulationThread(QThread):
         if self.client.board.itemAtPosition(x, 19).widget().is_sand() and not self.client.board.itemAtPosition(x+1, 19).widget().is_blocking():
             self.single_drop.emit(x, 19)
 
-        self.mutex.unlock()
+        self.client.board_update_mutex.unlock()
